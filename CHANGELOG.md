@@ -1,5 +1,10 @@
 # Changelog
 
+## Próxima versão
+
+- **PIW-QOL embutido, dentro das regras do jogo.** O PIW-QOL do JulianoCLI vem como preset em **Opções → Scripts**, ligado. É a versão 10.1.1 sem o que o anúncio do Poke Idle World proíbe em extensões: sem auto-reconnect da hunt (ele saía e entrava na hunt sozinho), sem +1.000/+10.000 e sem "Vender itens" na loja de bolas da hunt, e sem o botão de Mercado Global na barra de captura. O **🏪 Lojas** (Mercado Global, Poké Bolas e venda) e o **📦 Depot** portáteis só funcionam fora da hunt: dentro dela os botões ficam apagados, uma janela aberta na cidade fecha quando a conta entra numa hunt, e compra, venda, mercado e depot pedidos pelo script são recusados. Na dúvida (tela carregando, conexão caída), conta como hunt. O PIW-QOL original instalado pelo link fica pausado enquanto o embutido estiver ligado, e o chat segue com o 💬 do app.
+  *PIW-QOL built in, within the game rules: JulianoCLI's PIW-QOL 10.1.1 ships as an enabled preset, without what Poke Idle World forbids for extensions (no hunt auto-reconnect, no +1,000/+10,000 or selling in the hunt ball shop, no Global Market button in the capture bar). The portable Shops and Depot only work outside a hunt, failing closed when unsure. An original PIW-QOL installed by link is paused while the built-in one is on.*
+
 ## 1.5.27
 
 - **Tierlist por Pokémon e por gold/h.** Um seletor no topo da tierlist escolhe o que a nota mede: **XP/h** ou **Gold/h**. O jogo não manda gold por kill (o gold vem do loot vendido ao NPC), então o app calcula o loot esperado de cada hunt a partir da chance de cada drop e do preço de NPC, inclusive nas hunts que você nunca visitou, e multiplica pelos kills/h do modelo. E o chip **🎯 Pokémon** inverte a pergunta: escolha um Pokémon do seu time (com o nível, a qualidade, o IV e os TMs dele) ou digite qualquer um, e a lista mostra as melhores hunts pra ele até o seu nível, com kills/h, XP/h e gold/h de cada uma. Com Ditto, mostra a forma certa pra cada hunt.

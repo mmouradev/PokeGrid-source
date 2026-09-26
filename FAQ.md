@@ -75,6 +75,9 @@ Bug corrigido na **1.5.11**: o painel segurava a atualização enquanto o foco f
 ### Como desabilito um script?
 **Opções → Scripts**, desmarque a caixinha. Desde a 1.5.11 isso recarrega as contas e o script para na hora. Antes: desmarque e clique em **⟳ Atualizar tudo**.
 
+### O PIW-QOL já vem no app?
+Vem, ligado, em **Opções → Scripts** (preset **PIW-QOL: Quality of Life (edição PokeGrid)**, do JulianoCLI). É o PIW-QOL 10.1.1 sem o que o anúncio do Poke Idle World proíbe em extensões: saíram o auto-reconnect da hunt, as compras +1.000/+10.000 e o "Vender itens" da loja de bolas da hunt, e o botão de Mercado Global da barra de captura. O **🏪 Lojas** e o **📦 Depot** da barra lateral só funcionam fora da hunt: dentro dela ficam apagados, e uma janela aberta na cidade fecha quando a conta entra numa hunt. Continuam o mapa simplificado, as favoritas, o teleporte ⭐/↻, o Fast Travel da Pokédex, as compras rápidas no Mark em Cerulean, o Hunt Analyzer compacto com o comparador e as proteções de venda. Se você tinha instalado o PIW-QOL original pelo link, ele fica pausado enquanto o embutido estiver ligado. O 💬 Chat do app é quem mostra e esconde o chat.
+
 ### Como exporto os logs de hunt?
 **Simples → Hoje → "⬇ Hunts (N)"**. Baixa duas planilhas (hunts e drops) que abrem direto no Excel. O app guarda as últimas 150 hunts; as mais antigas ficam em `%APPDATA%\pokegrid\backups\hunts-historico.csv` (e `hunts-historico-drops.csv` pros drops por item).
 
