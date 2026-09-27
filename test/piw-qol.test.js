@@ -23,7 +23,7 @@ ok(/@version\s+10\.1\.1-pg1\n/.test(pq), 'versao do cabecalho bate com a da list
 ok(!/@updateURL|@downloadURL/.test(pq), 'sem atualizacao pelo original (voltaria com o que saiu)');
 
 console.log('\n--- o que as regras vetam saiu ---');
-ok(!pq.includes("'leave-hunt'") && !pq.includes("'enter-hunt'"), 'auto-reconnect: nenhum leave-hunt/enter-hunt enviado pelo script');
+ok(!/type:\s*'(?:leave|enter)-hunt'/.test(pq) && !/sendGameMessage\(\{\s*type:\s*'(?:leave|enter)-hunt'/.test(pq), 'auto-reconnect: o script nao monta nem envia leave-hunt/enter-hunt (so le os que o jogo manda)');
 ok(!pq.includes('location.reload('), 'auto-reconnect: o script nao recarrega a pagina sozinho');
 ok(!/cfg-auto-reconnect|Auto-reconnect da hunt/.test(pq), 'auto-reconnect: a opcao sumiu das configuracoes');
 ok(!pq.includes('injectHuntShopLauncher') && !pq.includes('script-open-global-market'), 'botao de Mercado Global na barra de captura da hunt saiu');
@@ -47,27 +47,60 @@ ok(pq.includes('if (HUNT_BLOCKED_SOCKET_TYPES.has(message?.type) && isPortableBl
 ok(pq.includes('updatePortableAvailability();\n            if (Date.now() - lastHuntNameRefreshAt >= 5000)') && pq.includes('setInterval(updatePortableAvailability, 2000);'), 'botoes e janelas acompanham a entrada na hunt (DOM e socket)');
 
 // a trava real: HUNT_DOM_SELECTOR, isPortableBlocked, HUNT_BLOCKED_API e os tipos de socket
-const trava = new Function('document', 'window', 'isCityName', 'getCurrentHuntLocation',
-  'let serverHuntActive = null;\n' + pedaco('    const HUNT_DOM_SELECTOR = [', '\n    function handleGameSocketMessage(')
-  + '\nreturn { isPortableBlocked, HUNT_BLOCKED_API, HUNT_BLOCKED_SOCKET_TYPES, setServer: (v) => { serverHuntActive = v; } };');
+const trava = new Function('document', 'window', 'isCityName', 'getCurrentHuntLocation', 'Date',
+  pedaco('    let serverHuntActive = null;', '\n    function handleGameSocketMessage(')
+  + '\nconst fieldInit = (message) => { ' + pedaco("        if (message?.type === 'field-init'", "\n        if (message?.type === 'inventory')") + ' };'
+  + '\nreturn { isPortableBlocked, HUNT_BLOCKED_API, HUNT_BLOCKED_SOCKET_TYPES, observeOutgoingHuntState, fieldInit, setServer: (v) => { serverHuntActive = v; } };');
 const CITY = new Function(pedaco('    const CITY_NAMES = ', '\n    function isCityMarker(') + '\nreturn isCityName;')();
+const relogio = { t: 1700000000000 };
 const monta = ({ hud = '', dom = [], poke } = {}) => {
   const doc = { querySelector: (sel) => (dom.some((d) => sel.split(',').includes(d)) ? {} : null) };
-  return trava(doc, { __poke: poke }, CITY, () => hud);
+  const est = { hud };
+  const api = trava(doc, { __poke: poke }, CITY, () => est.hud, { now: () => relogio.t });
+  api.vaiPara = (h) => { est.hud = h; };
+  return api;
 };
+const envia = (api, o) => api.observeOutgoingHuntState(JSON.stringify(o));
 ok(monta({ hud: 'Cerulean City' }).isPortableBlocked() === false, 'na cidade (HUD Cerulean City): libera');
 ok(monta({ hud: 'Kanto · Viridian City' }).isPortableBlocked() === false, 'HUD com regiao e cidade: libera');
 ok(monta({ hud: 'Paras Cave' }).isPortableBlocked() === true, 'HUD numa hunt: barra');
 ok(monta({ hud: '' }).isPortableBlocked() === true, 'HUD vazio (conexao caida, tela carregando): barra, a trava falha fechada');
 ok(monta({ hud: 'Cerulean City', dom: ['[data-guide="capture-bar"]'] }).isPortableBlocked() === true, 'barra de captura na tela: barra, mesmo com o HUD dizendo cidade');
 ok(monta({ hud: 'Cerulean City', dom: ['.boss-window'] }).isPortableBlocked() === true, 'luta de boss na tela: barra');
-ok(monta({ hud: 'Cerulean City', poke: { ws: { 'field-init': { slug: 'paras' } } } }).isPortableBlocked() === true, 'o PokeGrid viu field-init (entrou na hunt): barra');
+ok(monta({ hud: 'Cerulean City', poke: { ws: { 'field-init': { slug: 'paras' } }, fiT: relogio.t - 5000 } }).isPortableBlocked() === true, 'o PokeGrid viu field-init antes do script entrar (injetado com a conta na hunt): barra');
 ok(monta({ hud: 'Cerulean City', poke: { ws: { 'field-init': null } } }).isPortableBlocked() === false, 'field-init zerado pelo PokeGrid (field-none/teleporte pra cidade): libera');
 const t1 = monta({ hud: 'Cerulean City' }); t1.setServer(true);
 ok(t1.isPortableBlocked() === true, 'o proprio script viu field-init: barra');
 t1.setServer(false);
 ok(t1.isPortableBlocked() === false, 'e viu field-teleport-city: libera de novo');
-ok(pq.includes("if (message?.type === 'field-init') serverHuntActive = true;\n        else if (message?.type === 'field-none' || message?.type === 'field-teleport-city') serverHuntActive = false;"), 'o socket alimenta o estado de hunt com os mesmos tipos que o PokeGrid usa');
+ok(pq.includes("else if (message?.type === 'field-none' || message?.type === 'field-teleport-city') serverHuntActive = false;"), 'field-none e field-teleport-city tambem liberam');
+ok(pq.includes('        observeOutgoingHuntState(data);\n        return nativeWebSocketSend.call(this, data);'), 'o patch de envio le o que o proprio jogo manda (enter-hunt, leave-hunt, set-city)');
+
+// o bug do print: saiu da hunt pro Cerulean pelo mapa. O jogo so manda leave-hunt e set-city, nenhum
+// field-none, e o field-init velho no PokeGrid deixava Lojas e Depot apagados na cidade
+const pk = { ws: { 'field-init': { slug: 'paras-cave' } }, fiT: relogio.t - 60000 };
+const v1 = monta({ hud: 'Nível 45 · Paras Cave', poke: pk });
+ok(v1.isPortableBlocked() === true, 'na hunt (field-init no PokeGrid, HUD da hunt): barra');
+relogio.t += 1000; envia(v1, { type: 'leave-hunt' }); envia(v1, { type: 'set-city', slug: 'cerulean' }); v1.vaiPara('Nível 45 · Cerulean');
+ok(v1.isPortableBlocked() === false, 'foi pro Cerulean (leave-hunt + set-city, field-init velho no PokeGrid): libera');
+relogio.t += 1000; v1.fieldInit({ type: 'field-init', slug: 'paras-cave' });
+ok(v1.isPortableBlocked() === false, 'field-init atrasado da hunt que ficou pra tras nao prende de novo');
+envia(v1, { type: 'enter-hunt', slug: 'bug-forest' }); v1.vaiPara('Nível 45 · Bug Forest');
+ok(v1.isPortableBlocked() === true, 'entrou em outra hunt (enter-hunt enviado pelo jogo): barra na hora');
+envia(v1, { type: 'leave-hunt' });
+ok(v1.isPortableBlocked() === true, 'leave-hunt com o HUD ainda na hunt (troca de hunt no meio): segue barrando pelo HUD');
+envia(v1, { type: 'enter-hunt', slug: 'bug-forest' }); v1.fieldInit({ type: 'field-init', slug: 'bug-forest' }); v1.vaiPara('Nível 45 · Cerulean');
+ok(v1.isPortableBlocked() === true, 'field-init da hunt em que acabou de entrar vale, mesmo com o HUD atrasado');
+const v2 = monta({ hud: 'Nível 45 · Cerulean' });
+v2.fieldInit({ type: 'field-init', slug: 'paras-cave' });
+ok(v2.isPortableBlocked() === true, 'sem saida vista ainda, field-init vale (script entrou com a conta na hunt)');
+envia(v2, { type: 'set-city', slug: 'cerulean' });
+ok(v2.isPortableBlocked() === false, 'set-city sozinho (conta recarregada que nasce na cidade) libera');
+const v3 = monta({ hud: 'Nível 45 · Cerulean' });
+envia(v3, { type: 'enter-hunt', slug: 'fishing-cerulean' });
+ok(v3.isPortableBlocked() === true, 'pesca tambem usa enter-hunt: barra, por seguranca');
+v3.observeOutgoingHuntState('nao e json {'); v3.observeOutgoingHuntState(new ArrayBuffer(4));
+ok(v3.isPortableBlocked() === true, 'envio binario ou quebrado nao mexe no estado');
 
 const { HUNT_BLOCKED_API: API, HUNT_BLOCKED_SOCKET_TYPES: SOCK } = monta();
 ['/api/game/shop/buy', '/api/game/shop/sell', '/api/game/pokemon/sell', '/api/game/balls/buy', '/api/game/depot', '/api/game/depot/move', '/api/game/market?category=items', '/api/game/market/action']

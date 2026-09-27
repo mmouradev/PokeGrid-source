@@ -28,7 +28,33 @@
     // Mark, usar o Mercado Global e usar o Depot durante a hunt, e automatizar ações do jogo. Por
     // isso o auto-reconnect saiu e as janelas portáteis (🏪 Lojas e 📦 Depot) só funcionam fora da
     // hunt. A trava falha fechada: sem certeza de estar numa cidade, conta como hunt.
-    let serverHuntActive = null; // field-init = entrou na hunt; field-none / field-teleport-city = saiu
+    // Estado de hunt pelo socket. Sair da hunt pelo mapa nao gera field-none: o jogo so manda
+    // leave-hunt e set-city. Por isso as mensagens que o proprio jogo envia contam, e um field-init
+    // depois de uma saida so vale se for da hunt em que ele acabou de entrar.
+    let serverHuntActive = null;
+    let lastHuntEnterSlug = null;
+    let lastHuntLeaveAt = 0;
+    function observeOutgoingHuntState(data) {
+        if (typeof data !== 'string' || data.length > 300 || !/"(?:enter-hunt|leave-hunt|set-city)"/.test(data)) return;
+        let message;
+        try { message = JSON.parse(data); } catch { return; }
+        if (message?.type === 'enter-hunt') {
+            serverHuntActive = true;
+            lastHuntEnterSlug = String(message.slug || '');
+        } else if (message?.type === 'leave-hunt' || message?.type === 'set-city') {
+            serverHuntActive = false;
+            lastHuntEnterSlug = null;
+            lastHuntLeaveAt = Date.now();
+        }
+    }
+    function isPokeGridHuntActive() {
+        // o PokeGrid ve o field-init desde o carregamento da pagina (este script entra depois), mas
+        // so o apaga com field-none/field-teleport-city: vale se veio depois da ultima saida vista aqui
+        try {
+            const P = window.__poke;
+            return Boolean(P?.ws?.['field-init']) && Number(P.fiT || 0) > lastHuntLeaveAt;
+        } catch { return false; }
+    }
     const HUNT_DOM_SELECTOR = [
         '[data-guide="capture-bar"]',
         '.hunt-ui',
@@ -45,9 +71,7 @@
     function isPortableBlocked() {
         if (document.querySelector(HUNT_DOM_SELECTOR)) return true;
         if (serverHuntActive === true) return true;
-        // o PokeGrid acompanha o mesmo field-init desde o carregamento da página, que este script,
-        // injetado depois, pode ter perdido
-        try { if (window.__poke?.ws?.['field-init']) return true; } catch {}
+        if (serverHuntActive === null && isPokeGridHuntActive()) return true;
         return !isCityName(getCurrentHuntLocation());
     }
     // Endpoints das janelas portáteis que a regra veta durante a hunt. Barrados aqui também, e não só
@@ -62,7 +86,7 @@
         } catch {
             return;
         }
-        if (message?.type === 'field-init') serverHuntActive = true;
+        if (message?.type === 'field-init' && (!lastHuntLeaveAt || String(message.slug || '') === lastHuntEnterSlug)) serverHuntActive = true;
         else if (message?.type === 'field-none' || message?.type === 'field-teleport-city') serverHuntActive = false;
         if (message?.type === 'inventory') latestInventory = message.items || [];
         if (message?.type === 'family') latestFamily = message;
@@ -107,6 +131,7 @@
     // esse socket, no primeiro envio do próprio jogo.
     NativeWebSocket.prototype.send = function(data) {
         trackGameSocket(this);
+        observeOutgoingHuntState(data);
         return nativeWebSocketSend.call(this, data);
     };
 
