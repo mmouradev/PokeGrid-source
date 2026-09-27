@@ -67,7 +67,11 @@ ok(monta({ hud: 'Kanto · Viridian City' }).isPortableBlocked() === false, 'HUD 
 ok(monta({ hud: 'Paras Cave' }).isPortableBlocked() === true, 'HUD numa hunt: barra');
 ok(monta({ hud: '' }).isPortableBlocked() === true, 'HUD vazio (conexao caida, tela carregando): barra, a trava falha fechada');
 ok(monta({ hud: 'Cerulean City', dom: ['[data-guide="capture-bar"]'] }).isPortableBlocked() === true, 'barra de captura na tela: barra, mesmo com o HUD dizendo cidade');
-ok(monta({ hud: 'Cerulean City', dom: ['.boss-window'] }).isPortableBlocked() === true, 'luta de boss na tela: barra');
+ok(monta({ hud: 'Cerulean City', dom: ['.boss-team'] }).isPortableBlocked() === true, 'luta de boss na tela (time do boss): barra');
+// terceiro print: [tela de hunt/boss (dock-bosses)]. O botao Bosses do menu do jogo casava com
+// [data-guide*="boss"] e apagava Lojas e Depot em qualquer lugar
+const SEL = new Function(pedaco('    const HUNT_DOM_SELECTOR = [', '\n    // Devolve o motivo') + '\nreturn HUNT_DOM_SELECTOR;')();
+ok(!/data-guide\*=|\.boss-window/.test(SEL) && SEL.split(',').every((x) => ['[data-guide="capture-bar"]', '.boss-team'].includes(x)), 'seletor so com sinais reais da hunt: ' + SEL);
 ok(monta({ hud: 'Cerulean City', poke: { ws: { 'field-init': { slug: 'paras' } }, fiT: relogio.t - 5000 } }).isPortableBlocked() === true, 'o PokeGrid viu field-init antes do script entrar (injetado com a conta na hunt): barra');
 ok(monta({ hud: 'Cerulean City', poke: { ws: { 'field-init': null } } }).isPortableBlocked() === false, 'field-init zerado pelo PokeGrid (field-none/teleporte pra cidade): libera');
 const t1 = monta({ hud: 'Cerulean City' }); t1.setServer(true);

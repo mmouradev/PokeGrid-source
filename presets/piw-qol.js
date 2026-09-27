@@ -72,18 +72,13 @@
     function isSafeTownName(name) {
         return isCityName(name) || SAFE_TOWN_NAMES.test(String(name || ''));
     }
+    // Só sinais que o jogo realmente desenha na hunt: a barra de captura e o time da luta de boss.
+    // Nada de [data-guide*="boss"]: o botão Bosses do menu (dock-bosses) está sempre na tela e
+    // deixava Lojas e Depot apagados em qualquer lugar. A luta de boss também chega como campo
+    // (enter-hunt/field-init), que o estado do socket já cobre.
     const HUNT_DOM_SELECTOR = [
         '[data-guide="capture-bar"]',
-        '.hunt-ui',
-        '.battle-window',
-        '.wild-pokemon',
-        '[data-guide*="boss" i]',
-        '[data-guide*="raid" i]',
-        '.boss-window',
-        '.boss-ui',
-        '.boss-battle',
-        '.raid-window',
-        '.raid-ui'
+        '.boss-team'
     ].join(',');
     // Devolve o motivo do bloqueio ('' = liberado). O motivo aparece no título do botão apagado.
     function portableBlockReason() {
