@@ -50,13 +50,14 @@ ok(pq.includes('updatePortableAvailability();\n            if (Date.now() - last
 const trava = new Function('document', 'window', 'isCityName', 'getCurrentHuntLocation', 'Date',
   pedaco('    let serverHuntActive = null;', '\n    function handleGameSocketMessage(')
   + '\nconst fieldInit = (message) => { ' + pedaco("        if (message?.type === 'field-init'", "\n        if (message?.type === 'inventory')") + ' };'
-  + '\nreturn { isPortableBlocked, HUNT_BLOCKED_API, HUNT_BLOCKED_SOCKET_TYPES, observeOutgoingHuntState, fieldInit, setServer: (v) => { serverHuntActive = v; } };');
+  + '\nreturn { isPortableBlocked, portableBlockReason, HUNT_BLOCKED_API, HUNT_BLOCKED_SOCKET_TYPES, observeOutgoingHuntState, fieldInit, setServer: (v) => { serverHuntActive = v; } };');
 const CITY = new Function(pedaco('    const CITY_NAMES = ', '\n    function isCityMarker(') + '\nreturn isCityName;')();
 const relogio = { t: 1700000000000 };
+const HUD_REAL = new Function('document', pedaco('    function getCurrentHuntLocation() {', '\n    function saveHuntSession(') + '\nreturn getCurrentHuntLocation;');
 const monta = ({ hud = '', dom = [], poke } = {}) => {
-  const doc = { querySelector: (sel) => (dom.some((d) => sel.split(',').includes(d)) ? {} : null) };
   const est = { hud };
-  const api = trava(doc, { __poke: poke }, CITY, () => est.hud, { now: () => relogio.t });
+  const doc = { querySelector: (sel) => (sel === '.phud-tloc' ? (est.hud ? { textContent: est.hud } : null) : dom.some((d) => sel.split(',').includes(d)) ? {} : null) };
+  const api = trava(doc, { __poke: poke }, CITY, HUD_REAL(doc), { now: () => relogio.t });
   api.vaiPara = (h) => { est.hud = h; };
   return api;
 };
@@ -101,6 +102,24 @@ envia(v3, { type: 'enter-hunt', slug: 'fishing-cerulean' });
 ok(v3.isPortableBlocked() === true, 'pesca tambem usa enter-hunt: barra, por seguranca');
 v3.observeOutgoingHuntState('nao e json {'); v3.observeOutgoingHuntState(new ArrayBuffer(4));
 ok(v3.isPortableBlocked() === true, 'envio binario ou quebrado nao mexe no estado');
+
+// o segundo print: Shopping (Mark, Depot, Mercado) e um mapa-cidade do jogo, fora do CITY_NAMES do PIW-QOL
+ok(monta({ hud: 'Nível 45 · Shopping' }).isPortableBlocked() === false, 'Shopping (HUD em pt/es): libera');
+ok(monta({ hud: 'Level 45 · Shopping Mall' }).isPortableBlocked() === false, 'Shopping Mall (HUD em en): libera');
+ok(monta({ hud: 'Nível 45 · Goldenrod' }).isPortableBlocked() === false, 'Goldenrod: libera');
+ok(monta({ hud: 'Nível 45 · Pesca' }).isPortableBlocked() === true && monta({ hud: 'Level 45 · Fishing' }).isPortableBlocked() === true, 'pesca: barra');
+ok(monta({ hud: 'Nível 45 · Arena PvP' }).isPortableBlocked() === true && monta({ hud: 'Nível 45 · Ginásio' }).isPortableBlocked() === true, 'arena e ginasio: barra');
+const v4 = monta({ hud: 'Nível 45 · Cidade Nova' });
+ok(v4.isPortableBlocked() === true, 'cidade que o script ainda nao conhece, sem set-city: barra (falha fechada)');
+envia(v4, { type: 'set-city', slug: 'shopping' });
+ok(v4.isPortableBlocked() === false, 'mas o jogo mandou set-city de uma cidade: libera, mesmo com o nome desconhecido');
+v4.vaiPara('Nível 45 · Paras Cave');
+ok(v4.isPortableBlocked() === true, 'viajando pra uma hunt (HUD mudou, enter-hunt ainda nao saiu): barra na hora');
+const v5 = monta({ hud: 'Nível 45 · Arena PvP' });
+envia(v5, { type: 'set-city', slug: 'arena_pvp' });
+ok(v5.isPortableBlocked() === true, 'set-city da arena PvP nao libera');
+ok(/local "Paras Cave"/.test(v4.portableBlockReason()) && /enter-hunt/.test((envia(v4, { type: 'enter-hunt', slug: 'paras-cave' }), v4.portableBlockReason())), 'o motivo do bloqueio diz o que travou (vai no titulo do botao apagado)');
+ok(pq.includes("const title = blocked ? `${tr('huntBlocked')}\\n[${reason}]` : label;"), 'titulo do botao apagado mostra o motivo');
 
 const { HUNT_BLOCKED_API: API, HUNT_BLOCKED_SOCKET_TYPES: SOCK } = monta();
 ['/api/game/shop/buy', '/api/game/shop/sell', '/api/game/pokemon/sell', '/api/game/balls/buy', '/api/game/depot', '/api/game/depot/move', '/api/game/market?category=items', '/api/game/market/action']

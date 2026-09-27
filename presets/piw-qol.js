@@ -34,6 +34,11 @@
     let serverHuntActive = null;
     let lastHuntEnterSlug = null;
     let lastHuntLeaveAt = 0;
+    // set-city e o jogo dizendo que o mapa atual e uma cidade (ele manda ao chegar em cada uma).
+    // Os slugs sao os do jogo (o7 no bundle); arena_pvp fica de fora de proposito, e ginasio nao manda.
+    const SAFE_TOWN_SLUGS = new Set(['cerulean', 'pewter', 'viridian', 'cassino', 'goldenrod', 'shopping']);
+    let lastCitySlug = null;
+    let lastCityHud = null; // o HUD de quando o set-city saiu: viajar pra uma hunt troca o HUD antes do enter-hunt
     function observeOutgoingHuntState(data) {
         if (typeof data !== 'string' || data.length > 300 || !/"(?:enter-hunt|leave-hunt|set-city)"/.test(data)) return;
         let message;
@@ -41,10 +46,16 @@
         if (message?.type === 'enter-hunt') {
             serverHuntActive = true;
             lastHuntEnterSlug = String(message.slug || '');
+            lastCitySlug = null;
+            lastCityHud = null;
         } else if (message?.type === 'leave-hunt' || message?.type === 'set-city') {
             serverHuntActive = false;
             lastHuntEnterSlug = null;
             lastHuntLeaveAt = Date.now();
+            if (message.type === 'set-city') {
+                lastCitySlug = String(message.slug || '').toLowerCase();
+                lastCityHud = getCurrentHuntLocation();
+            }
         }
     }
     function isPokeGridHuntActive() {
@@ -54,6 +65,12 @@
             const P = window.__poke;
             return Boolean(P?.ws?.['field-init']) && Number(P.fiT || 0) > lastHuntLeaveAt;
         } catch { return false; }
+    }
+    // Nomes que o HUD mostra fora da hunt. O CITY_NAMES do mapa nao tem o Shopping (onde ficam o
+    // Mark, o Depot e o Mercado: "Shopping" em pt/es, "Shopping Mall" em en) nem Goldenrod.
+    const SAFE_TOWN_NAMES = /\b(?:shopping(?: mall)?|goldenrod(?: city)?)\b/i;
+    function isSafeTownName(name) {
+        return isCityName(name) || SAFE_TOWN_NAMES.test(String(name || ''));
     }
     const HUNT_DOM_SELECTOR = [
         '[data-guide="capture-bar"]',
@@ -68,11 +85,19 @@
         '.raid-window',
         '.raid-ui'
     ].join(',');
+    // Devolve o motivo do bloqueio ('' = liberado). O motivo aparece no título do botão apagado.
+    function portableBlockReason() {
+        const huntElement = document.querySelector(HUNT_DOM_SELECTOR);
+        if (huntElement) return `tela de hunt/boss (${huntElement.dataset?.guide || huntElement.className || 'elemento'})`;
+        if (serverHuntActive === true) return `enter-hunt/field-init${lastHuntEnterSlug ? ` (${lastHuntEnterSlug})` : ''}`;
+        if (serverHuntActive === null && isPokeGridHuntActive()) return 'field-init visto pelo PokeGrid';
+        const location = getCurrentHuntLocation();
+        if (isSafeTownName(location)) return '';
+        if (lastCitySlug && SAFE_TOWN_SLUGS.has(lastCitySlug) && location === lastCityHud) return '';
+        return `local "${location || '?'}" não reconhecido como cidade`;
+    }
     function isPortableBlocked() {
-        if (document.querySelector(HUNT_DOM_SELECTOR)) return true;
-        if (serverHuntActive === true) return true;
-        if (serverHuntActive === null && isPokeGridHuntActive()) return true;
-        return !isCityName(getCurrentHuntLocation());
+        return portableBlockReason() !== '';
     }
     // Endpoints das janelas portáteis que a regra veta durante a hunt. Barrados aqui também, e não só
     // no botão que abre a janela, para uma janela aberta na cidade não seguir operando depois do teleporte.
@@ -6177,12 +6202,14 @@
     // portátil aberta na cidade fecha sozinha quando o personagem entra numa hunt.
     const PORTABLE_BACKDROPS = '.portable-depot-backdrop, .hunt-sell-backdrop, .script-market-backdrop, .portable-ball-backdrop';
     function updatePortableAvailability() {
-        const blocked = isPortableBlocked();
+        const reason = portableBlockReason();
+        const blocked = reason !== '';
         [['dock-btn-shops', tr('shops')], ['dock-btn-depot', 'Depot']].forEach(([id, label]) => {
             const button = document.getElementById(id);
             if (!button) return;
             if (button.disabled !== blocked) button.disabled = blocked;
-            const title = blocked ? tr('huntBlocked') : label;
+            // o motivo no título ajuda a entender um bloqueio inesperado (passe o mouse no botão apagado)
+            const title = blocked ? `${tr('huntBlocked')}\n[${reason}]` : label;
             if (button.title !== title) button.title = title;
         });
         if (!blocked) return;
